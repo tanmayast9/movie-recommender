@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}My Watchlist - CineMatch{% endblock %}
+
+{% block content %}
+<div class="section-container">
+  <div class="section-header flex-between">
+    <div>
+      <h1 class="page-title">My Watchlist</h1>
+      <p class="page-subtitle">Queue movies you want to watch next and mark completed ones.</p>
+    </div>
+  </div>
+
+  <div id="watchlistNotLoggedIn" class="auth-required-box hidden">
+    <h3>Sign in to access your Watchlist</h3>
+    <p>Personalize your experience and retain your watchlist securely across visits.</p>
+    <a href="/login" class="btn btn-primary">Log In or Register</a>
+  </div>
+
+  <div id="watchlistEmptyState" class="empty-suggestion-box hidden">
+    <div class="empty-icon">&#128278;</div>
+    <h3 class="empty-title">Your watchlist is empty</h3>
+    <p class="empty-desc">Add movies from the Discover page or spotlight list to build your queue.</p>
+    <a href="/discover" class="btn btn-primary">Discover Movies</a>
+  </div>
+
+  <div class="movie-grid" id="watchlistGrid">
+    <div class="loading-spinner">Loading your watchlist...</div>
+  </div>
+</div>
+{% endblock %}

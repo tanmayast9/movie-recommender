@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}My Favorites - CineMatch{% endblock %}
+
+{% block content %}
+<div class="section-container">
+  <div class="section-header flex-between">
+    <div>
+      <h1 class="page-title">My Favorites</h1>
+      <p class="page-subtitle">Your personal curated collection of favorite movies.</p>
+    </div>
+  </div>
+
+  <div id="favoritesNotLoggedIn" class="auth-required-box hidden">
+    <h3>Sign in to access your Favorites</h3>
+    <p>Create a free account or log in to save movies across devices and sessions.</p>
+    <a href="/login" class="btn btn-primary">Log In or Register</a>
+  </div>
+
+  <div id="favoritesEmptyState" class="empty-suggestion-box hidden">
+    <div class="empty-icon">&#9825;</div>
+    <h3 class="empty-title">Your favorites list is empty</h3>
+    <p class="empty-desc">Explore movies and click the favorite heart icon to save titles here.</p>
+    <a href="/discover" class="btn btn-primary">Discover Movies</a>
+  </div>
+
+  <div class="movie-grid" id="favoritesGrid">
+    <div class="loading-spinner">Loading your favorites...</div>
+  </div>
+</div>
+{% endblock %}

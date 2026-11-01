@@ -1,0 +1,6 @@
+{
+  "name": "CineMatch - Movie Discovery & Recommendation",
+  "description": "Discover movies tailored to your taste with rule-based filtering, content-based TF-IDF similarity, transparent recommendation explanations, watchlist, and favorites.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

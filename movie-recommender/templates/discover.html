@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Discover Movies - CineMatch{% endblock %}
+
+{% block content %}
+<div class="discover-layout-container">
+  <!-- Page Header -->
+  <div class="discover-header">
+    <h1 class="page-title">Discover Movies</h1>
+    <p class="page-subtitle">Filter by genre, language, country, rating thresholds, and release windows.</p>
+  </div>
+
+  <div class="discover-main-grid">
+    <!-- Filter Panel Sidebar -->
+    <aside class="filter-panel" id="filterPanel">
+      <div class="filter-header">
+        <h2 class="filter-title">Filter Catalogue</h2>
+        <button id="clearFiltersBtn" class="btn-text">Clear All</button>
+      </div>
+
+      <form id="filterForm" class="filter-form">
+        <!-- Search Input -->
+        <div class="filter-group">
+          <label for="filterSearch" class="filter-label">Title / Keyword</label>
+          <input type="text" id="filterSearch" name="search" class="filter-input" placeholder="e.g. Interstellar, Mars..." />
+        </div>
+
+        <!-- Genre Filter -->
+        <div class="filter-group">
+          <label for="filterGenre" class="filter-label">Genre</label>
+          <select id="filterGenre" name="genre" class="filter-select">
+            <option value="">All Genres</option>
+            <option value="Sci-Fi">Sci-Fi</option>
+            <option value="Action">Action</option>
+            <option value="Horror">Horror</option>
+            <option value="Thriller">Thriller</option>
+            <option value="Drama">Drama</option>
+            <option value="Comedy">Comedy</option>
+            <option value="Romance">Romance</option>
+            <option value="Animation">Animation</option>
+            <option value="Adventure">Adventure</option>
+            <option value="Crime">Crime</option>
+            <option value="Fantasy">Fantasy</option>
+            <option value="War">War</option>
+            <option value="History">History</option>
+            <option value="Family">Family</option>
+          </select>
+        </div>
+
+        <!-- Language Filter -->
+        <div class="filter-group">
+          <label for="filterLanguage" class="filter-label">Language</label>
+          <select id="filterLanguage" name="language" class="filter-select">
+            <option value="">All Languages</option>
+            <option value="en">English (en)</option>
+            <option value="kn">Kannada (kn)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+            <option value="ta">Tamil (ta)</option>
+            <option value="ml">Malayalam (ml)</option>
+            <option value="ko">Korean (ko)</option>
+            <option value="ja">Japanese (ja)</option>
+            <option value="es">Spanish (es)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+          </select>
+        </div>
+
+        <!-- Country Filter -->
+        <div class="filter-group">
+          <label for="filterCountry" class="filter-label">Country of Origin</label>
+          <select id="filterCountry" name="country" class="filter-select">
+            <option value="">All Countries</option>
+            <option value="IN">India (IN)</option>
+            <option value="US">United States (US)</option>
+            <option value="GB">United Kingdom (GB)</option>
+            <option value="KR">South Korea (KR)</option>
+            <option value="JP">Japan (JP)</option>
+          </select>
+        </div>
+
+        <!-- Rating Range Filter -->
+        <div class="filter-group">
+          <div class="filter-label-row">
+            <label for="filterMinRating" class="filter-label">Minimum Rating (0 - 10)</label>
+            <span id="ratingDisplay" class="filter-value-display">0.0+</span>
+          </div>
+          <input type="range" id="filterMinRating" name="min_rating" min="0" max="9" step="0.5" value="0" class="filter-slider" />
+        </div>
+
+        <!-- Release Year Range Filter -->
+        <div class="filter-group">
+          <label class="filter-label">Release Year Window</label>
+          <div class="year-inputs">
+            <input type="number" id="filterYearFrom" name="year_from" min="1970" max="2026" placeholder="From (1970)" class="filter-input-sm" />
+            <span class="year-sep">to</span>
+            <input type="number" id="filterYearTo" name="year_to" min="1970" max="2026" placeholder="To (2026)" class="filter-input-sm" />
+          </div>
+        </div>
+
+        <!-- Sort Criteria -->
+        <div class="filter-group">
+          <label for="filterSort" class="filter-label">Sort Results By</label>
+          <select id="filterSort" name="sort" class="filter-select">
+            <option value="popularity">Popularity (High to Low)</option>
+            <option value="rating">Rating (Highest First)</option>
+            <option value="rating_asc">Rating (Lowest First)</option>
+            <option value="release_date">Release Date (Newest)</option>
+            <option value="release_date_asc">Release Date (Oldest)</option>
+            <option value="title">Movie Title (A - Z)</option>
+          </select>
+        </div>
+
+        <div class="filter-buttons">
+          <button type="submit" class="btn btn-primary btn-block">Apply Filters</button>
+        </div>
+      </form>
+    </aside>
+
+    <!-- Results Area -->
+    <section class="results-container">
+      <!-- Active Filters Bar -->
+      <div class="active-filters-bar" id="activeFiltersBar">
+        <span class="active-filters-title">Active Filters:</span>
+        <div id="activeFilterChips" class="active-chips-container">
+          <span class="no-filter-tag">Showing all movies</span>
+        </div>
+      </div>
+
+      <!-- Result Count and Status -->
+      <div class="results-meta">
+        <span id="resultsCountText" class="results-count">Loading results...</span>
+      </div>
+
+      <!-- Empty Suggestion Box -->
+      <div id="emptySuggestionBox" class="empty-suggestion-box hidden">
+        <div class="empty-icon">🔍</div>
+        <h3 class="empty-title">No movies match your selected criteria</h3>
+        <p id="emptySuggestionText" class="empty-desc">
+          Try relaxing your rating threshold, broadening your release year window, or removing some filter tags.
+        </p>
+        <button id="resetFiltersEmptyBtn" class="btn btn-secondary">Reset All Filters</button>
+      </div>
+
+      <!-- Movie Grid -->
+      <div class="movie-grid" id="discoverMovieGrid">
+        <div class="loading-spinner">Fetching movies...</div>
+      </div>
+
+      <!-- Pagination / Load More -->
+      <div class="pagination-container" id="paginationContainer">
+        <button id="prevPageBtn" class="btn btn-secondary" disabled>&larr; Previous</button>
+        <span id="pageIndicator" class="page-indicator">Page 1 of 1</span>
+        <button id="nextPageBtn" class="btn btn-secondary" disabled>Next &rarr;</button>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

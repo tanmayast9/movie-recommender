@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Account Login & Registration - CineMatch{% endblock %}
+
+{% block content %}
+<div class="auth-page-container">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button id="tabLogin" class="auth-tab active">Log In</button>
+      <button id="tabRegister" class="auth-tab">Create Account</button>
+    </div>
+
+    <!-- Alert Message Box -->
+    <div id="authAlert" class="auth-alert hidden"></div>
+
+    <!-- Login Form -->
+    <form id="loginForm" class="auth-form">
+      <div class="form-group">
+        <label for="loginIdentifier" class="form-label">Username or Email</label>
+        <input type="text" id="loginIdentifier" class="form-input" required autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label for="loginPassword" class="form-label">Password</label>
+        <input type="password" id="loginPassword" class="form-input" required autocomplete="current-password" />
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" class="auth-form hidden">
+      <div class="form-group">
+        <label for="regUsername" class="form-label">Username</label>
+        <input type="text" id="regUsername" class="form-input" required minlength="3" autocomplete="username" />
+        <span class="form-hint">At least 3 characters.</span>
+      </div>
+      <div class="form-group">
+        <label for="regEmail" class="form-label">Email Address</label>
+        <input type="email" id="regEmail" class="form-input" required autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label for="regPassword" class="form-label">Password</label>
+        <input type="password" id="regPassword" class="form-input" required minlength="6" autocomplete="new-password" />
+        <span class="form-hint">At least 6 characters with secure hashing.</span>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Register Account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

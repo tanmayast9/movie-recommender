@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}CineMatch - Movie Discovery & Recommendation{% endblock %}</title>
+  <meta name="description" content="Discover movies tailored to your taste with rule-based filtering, content-based TF-IDF similarity, transparent recommendation explanations, watchlist, and favorites.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="site-body">
+  <!-- Top Navigation Bar (3-Zone Top Bar Contract) -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <!-- Zone 1: Wordmark / Brand -->
+      <a href="/" class="brand-logo">
+        <span class="brand-text">Cine<span class="brand-accent">Match</span></span>
+      </a>
+
+      <!-- Zone 2: Navigation Links -->
+      <nav class="nav-links">
+        <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Home</a>
+        <a href="/discover" class="nav-link {% if request.path == '/discover' %}active{% endif %}">Discover Movies</a>
+        <a href="/favorites" class="nav-link {% if request.path == '/favorites' %}active{% endif %}">Favorites</a>
+        <a href="/watchlist" class="nav-link {% if request.path == '/watchlist' %}active{% endif %}">Watchlist</a>
+      </nav>
+
+      <!-- Zone 3: Actions & Theme Toggle -->
+      <div class="nav-actions">
+        <button id="themeToggleBtn" class="theme-toggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+          <span class="theme-icon-dark">🌙</span>
+          <span class="theme-icon-light">☀️</span>
+        </button>
+
+        <div id="authNavZone" class="auth-zone">
+          <a href="/login" class="btn btn-secondary btn-sm" id="loginNavBtn">Login / Register</a>
+          <div id="userProfileNav" class="user-profile-menu hidden">
+            <span id="navUsername" class="nav-username"></span>
+            <button id="logoutBtn" class="btn btn-ghost btn-sm">Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Site Footer with TMDB Attribution -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <span class="footer-logo">CineMatch</span>
+        <p class="footer-tagline">Rule-based filtering and content-based similarity recommendation engine.</p>
+      </div>
+      <div class="footer-attribution">
+        <p class="attribution-text">
+          Movie data and imagery sourced from <strong>TMDB</strong>. Streaming availability provided by <strong>JustWatch via TMDB</strong>.
+          This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="/">Home</a>
+        <a href="/discover">Discover</a>
+        <a href="/favorites">Favorites</a>
+        <a href="/watchlist">Watchlist</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

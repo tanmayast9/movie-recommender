@@ -1,0 +1,231 @@
+{
+  "info": {
+    "_postman_id": "c1f7a08b-4a5e-436c-9457-cinematch001",
+    "name": "CineMatch API Collection",
+    "description": "Postman API test collection for CineMatch: Movie Discovery, Recommendation Engine (TF-IDF), Streaming Providers, Authentication, Favorites, and Watchlist.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        }
+      }
+    },
+    {
+      "name": "Get Genres",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/genres",
+          "host": ["{{base_url}}"],
+          "path": ["api", "genres"]
+        }
+      }
+    },
+    {
+      "name": "Suggest Movie Live (Internet)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-TMDB-Key", "value": "", "description": "Optional custom TMDB key" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/suggest-live?mood=mind-bending&language=en&min_rating=7.5",
+          "host": ["{{base_url}}"],
+          "path": ["api", "suggest-live"],
+          "query": [
+            { "key": "mood", "value": "mind-bending" },
+            { "key": "language", "value": "en" },
+            { "key": "min_rating", "value": "7.5" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Discover Movies (Combined Filters)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/movies?genre=Sci-Fi&language=en&min_rating=7.5&sort=rating&page=1&limit=12",
+          "host": ["{{base_url}}"],
+          "path": ["api", "movies"],
+          "query": [
+            { "key": "genre", "value": "Sci-Fi" },
+            { "key": "language", "value": "en" },
+            { "key": "min_rating", "value": "7.5" },
+            { "key": "sort", "value": "rating" },
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "12" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Movie Detail",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/movies/157336",
+          "host": ["{{base_url}}"],
+          "path": ["api", "movies", "157336"]
+        }
+      }
+    },
+    {
+      "name": "Get Content-Based Similar Movies (TF-IDF)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/movies/157336/similar?limit=6",
+          "host": ["{{base_url}}"],
+          "path": ["api", "movies", "157336", "similar"],
+          "query": [{ "key": "limit", "value": "6" }]
+        }
+      }
+    },
+    {
+      "name": "Get Watch Providers (India default)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/movies/157336/watch-providers?region=IN",
+          "host": ["{{base_url}}"],
+          "path": ["api", "movies", "157336", "watch-providers"],
+          "query": [{ "key": "region", "value": "IN" }]
+        }
+      }
+    },
+    {
+      "name": "Quick Search",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/search?q=mars",
+          "host": ["{{base_url}}"],
+          "path": ["api", "search"],
+          "query": [{ "key": "q", "value": "mars" }]
+        }
+      }
+    },
+    {
+      "name": "User Registration",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"moviefan\",\n  \"email\": \"moviefan@example.com\",\n  \"password\": \"SuperSecret123!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/register",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "User Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username_or_email\": \"moviefan\",\n  \"password\": \"SuperSecret123!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Get Current User Profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/auth/me",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "me"]
+        }
+      }
+    },
+    {
+      "name": "Add to Favorites",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"movie_id\": 157336,\n  \"title\": \"Interstellar\",\n  \"poster_path\": \"https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg\",\n  \"vote_average\": 8.45,\n  \"vote_count\": 35210,\n  \"release_date\": \"2014-11-05\",\n  \"genres\": [\"Sci-Fi\", \"Adventure\", \"Drama\"]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/favorites",
+          "host": ["{{base_url}}"],
+          "path": ["api", "favorites"]
+        }
+      }
+    },
+    {
+      "name": "Get Favorites",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/favorites",
+          "host": ["{{base_url}}"],
+          "path": ["api", "favorites"]
+        }
+      }
+    },
+    {
+      "name": "Add to Watchlist",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"movie_id\": 961323,\n  \"title\": \"Kantara\",\n  \"poster_path\": \"https://image.tmdb.org/t/p/w500/mB0p2z7v0l1C0hS5U2mU7v7q7C5.jpg\",\n  \"vote_average\": 8.15,\n  \"vote_count\": 480,\n  \"release_date\": \"2022-09-30\",\n  \"genres\": [\"Action\", \"Thriller\", \"Drama\"]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/watchlist",
+          "host": ["{{base_url}}"],
+          "path": ["api", "watchlist"]
+        }
+      }
+    },
+    {
+      "name": "Get Watchlist",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/watchlist",
+          "host": ["{{base_url}}"],
+          "path": ["api", "watchlist"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ]
+}

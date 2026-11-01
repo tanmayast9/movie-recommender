@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}CineMatch - Find Your Next Favourite Movie{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+  <div class="hero-backdrop" id="heroBackdrop"></div>
+  <div class="hero-overlay"></div>
+  <div class="hero-container">
+    <div class="hero-content">
+      <h1 class="hero-title">Find Your Next Favourite Movie</h1>
+      <p class="hero-subtitle">
+        Explore movies through deterministic preference matching and transparent content-based similarity. Discover hidden gems, track your watchlist, and understand why each film is recommended.
+      </p>
+
+      <form id="heroSearchForm" class="hero-search-form" action="/discover" method="GET">
+        <div class="search-input-wrapper">
+          <input 
+            type="text" 
+            name="search" 
+            id="heroSearchInput" 
+            class="hero-search-input" 
+            placeholder="Search by movie title, keyword, or director..."
+            autocomplete="off"
+          />
+          <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+      </form>
+
+      <div class="hero-actions">
+        <a href="/discover" class="btn btn-primary btn-lg">Discover Movies</a>
+        <a href="#popularGenres" class="btn btn-outline btn-lg">Browse Genres</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Featured Movie Section with Large Backdrop -->
+<section class="section-container featured-section" id="featuredSection">
+  <div class="section-header">
+    <h2 class="section-title">Featured Spotlight</h2>
+    <span class="section-badge">Curated Pick</span>
+  </div>
+  <div id="featuredMovieContainer" class="featured-card">
+    <div class="featured-loader">Loading featured spotlight...</div>
+  </div>
+</section>
+
+<!-- Popular Genres Cards -->
+<section class="section-container" id="popularGenres">
+  <div class="section-header">
+    <h2 class="section-title">Popular Genres</h2>
+    <p class="section-desc">Click any genre to discover matching films with custom filters</p>
+  </div>
+  <div class="genre-grid" id="genreGrid">
+    <a href="/discover?genre=Sci-Fi" class="genre-card" data-genre="Sci-Fi">
+      <span class="genre-name">Sci-Fi</span>
+      <span class="genre-hint">Space, Time & Future</span>
+    </a>
+    <a href="/discover?genre=Action" class="genre-card" data-genre="Action">
+      <span class="genre-name">Action</span>
+      <span class="genre-hint">Adrenaline & Thrills</span>
+    </a>
+    <a href="/discover?genre=Horror" class="genre-card" data-genre="Horror">
+      <span class="genre-name">Horror</span>
+      <span class="genre-hint">Spines & Suspense</span>
+    </a>
+    <a href="/discover?genre=Thriller" class="genre-card" data-genre="Thriller">
+      <span class="genre-name">Thriller</span>
+      <span class="genre-hint">Twists & Pacing</span>
+    </a>
+    <a href="/discover?genre=Drama" class="genre-card" data-genre="Drama">
+      <span class="genre-name">Drama</span>
+      <span class="genre-hint">Emotional Stories</span>
+    </a>
+    <a href="/discover?genre=Animation" class="genre-card" data-genre="Animation">
+      <span class="genre-name">Animation</span>
+      <span class="genre-hint">Handcrafted Worlds</span>
+    </a>
+    <a href="/discover?genre=Comedy" class="genre-card" data-genre="Comedy">
+      <span class="genre-name">Comedy</span>
+      <span class="genre-hint">Humour & Satire</span>
+    </a>
+    <a href="/discover?genre=Adventure" class="genre-card" data-genre="Adventure">
+      <span class="genre-name">Adventure</span>
+      <span class="genre-hint">Epic Expeditions</span>
+    </a>
+  </div>
+</section>
+
+<!-- Top Rated Movies Live Carousel/Grid -->
+<section class="section-container">
+  <div class="section-header flex-between">
+    <div>
+      <h2 class="section-title">Top Rated Movies</h2>
+      <p class="section-desc">Acclaimed masterpieces rated by global audiences</p>
+    </div>
+    <a href="/discover?sort=rating" class="link-more">View all top rated &rarr;</a>
+  </div>
+  <div class="movie-grid" id="topRatedGrid">
+    <div class="loading-spinner">Loading top rated movies...</div>
+  </div>
+</section>
+
+<!-- Popular Movies Live Carousel/Grid -->
+<section class="section-container">
+  <div class="section-header flex-between">
+    <div>
+      <h2 class="section-title">Popular Worldwide</h2>
+      <p class="section-desc">Most trending and watched films across languages</p>
+    </div>
+    <a href="/discover?sort=popularity" class="link-more">View all popular &rarr;</a>
+  </div>
+  <div class="movie-grid" id="popularGrid">
+    <div class="loading-spinner">Loading popular movies...</div>
+  </div>
+</section>
+{% endblock %}

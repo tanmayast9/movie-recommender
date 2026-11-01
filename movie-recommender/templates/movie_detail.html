@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Movie Details - CineMatch{% endblock %}
+
+{% block content %}
+<div class="movie-detail-container" id="movieDetailRoot" data-movie-id="{{ movie_id }}">
+  <!-- Loading placeholder -->
+  <div id="movieLoadingState" class="detail-loading-state">
+    <div class="loading-spinner">Loading movie details and recommendation profile...</div>
+  </div>
+
+  <div id="movieContentState" class="hidden">
+    <!-- Backdrop Hero -->
+    <div class="detail-hero" id="detailHero">
+      <div class="detail-backdrop-scrim"></div>
+      <div class="detail-hero-content">
+        <a href="/discover" class="back-link">&larr; Back to Discovery</a>
+        <div class="detail-main-split">
+          <div class="detail-poster-wrapper">
+            <img id="detailPoster" src="" alt="Movie poster" class="detail-poster" />
+          </div>
+
+          <div class="detail-info">
+            <h1 id="detailTitle" class="detail-title"></h1>
+            <div class="detail-meta-row">
+              <span id="detailYear" class="meta-item"></span>
+              <span class="meta-sep">&middot;</span>
+              <span id="detailRuntime" class="meta-item"></span>
+              <span class="meta-sep">&middot;</span>
+              <span id="detailLanguage" class="meta-item"></span>
+              <span class="meta-sep">&middot;</span>
+              <span id="detailCountry" class="meta-item"></span>
+            </div>
+
+            <!-- Explicit Rating Label (TMDB explicitly labeled) -->
+            <div class="detail-rating-box">
+              <div class="rating-badge">
+                <span class="star-icon">&#9733;</span>
+                <span id="detailVoteAvg" class="rating-number"></span>
+              </div>
+              <div class="rating-meta">
+                <span class="rating-source-label" id="detailRatingSource">Source: TMDB Rating</span>
+                <span class="vote-count-label" id="detailVoteCount"></span>
+              </div>
+            </div>
+
+            <!-- Genre list -->
+            <div id="detailGenres" class="detail-genres"></div>
+
+            <!-- Actions: Favorite & Watchlist -->
+            <div class="detail-actions">
+              <button id="toggleFavoriteBtn" class="btn btn-primary">
+                <span class="btn-icon">&#9829;</span> <span id="favBtnLabel">Add to Favorites</span>
+              </button>
+              <button id="toggleWatchlistBtn" class="btn btn-secondary">
+                <span class="btn-icon">&#128278;</span> <span id="watchlistBtnLabel">Add to Watchlist</span>
+              </button>
+            </div>
+
+            <!-- Synopsis / Overview -->
+            <div class="detail-overview-section">
+              <h3 class="overview-heading">Synopsis</h3>
+              <p id="detailOverview" class="detail-overview-text"></p>
+            </div>
+
+            <!-- Cast & Crew -->
+            <div class="detail-crew-section">
+              <div class="crew-item">
+                <span class="crew-label">Director:</span>
+                <span id="detailDirector" class="crew-value"></span>
+              </div>
+              <div class="crew-item">
+                <span class="crew-label">Cast:</span>
+                <span id="detailCast" class="crew-value"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transparent "Why This Movie?" Section -->
+    <section class="section-container why-section">
+      <div class="why-card">
+        <div class="why-header">
+          <span class="why-icon">&#128161;</span>
+          <h2 class="why-title">Why This Recommendation?</h2>
+        </div>
+        <p id="whyExplanationText" class="why-text">
+          Evaluating content-based similarities, thematic keywords, and metadata attributes.
+        </p>
+      </div>
+    </section>
+
+    <!-- Where to Watch Section (Streaming Availability) -->
+    <section class="section-container watch-section">
+      <div class="section-header flex-between">
+        <div>
+          <h2 class="section-title">Where to Watch</h2>
+          <p class="section-desc">Authorized digital streaming, rental, and purchase providers</p>
+        </div>
+        <div class="region-selector-wrapper">
+          <label for="watchRegionSelect" class="region-label">Region:</label>
+          <select id="watchRegionSelect" class="region-select">
+            <option value="IN" selected>India (IN)</option>
+            <option value="US">United States (US)</option>
+            <option value="GB">United Kingdom (GB)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="watchProvidersContent" class="watch-providers-card">
+        <div class="loading-spinner">Checking authorized streaming channels...</div>
+      </div>
+    </section>
+
+    <!-- Content-Based Similar Movies Section -->
+    <section class="section-container similar-section">
+      <div class="section-header">
+        <h2 class="section-title">Similar Movies</h2>
+        <p class="section-desc">
+          Calculated via TF-IDF vectorization and cosine similarity over genres, overviews, and narrative attributes.
+        </p>
+      </div>
+      <div class="movie-grid" id="similarMoviesGrid">
+        <div class="loading-spinner">Calculating content-based similarity...</div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
