@@ -3,6 +3,7 @@ import { Filter, X, RotateCcw, ChevronLeft, ChevronRight, SlidersHorizontal, Ale
 import { Movie, FilterState } from '../types';
 import { MovieCard } from './MovieCard';
 import { ClientRecommendationEngine } from '../services/recommender';
+import { fetchLiveMoviesFromTMDB, fetchMovieGenres } from '../services/tmdbLiveService';
 
 interface DiscoverViewProps {
   movies: Movie[];
@@ -57,8 +58,6 @@ const COUNTRY_OPTIONS = [
   { code: 'JP', label: 'Japan (JP)' }
 ];
 
-import { fetchLiveMoviesFromTMDB, getActiveTmdbKey } from '../services/tmdbLiveService';
-
 export const DiscoverView: React.FC<DiscoverViewProps> = ({
   movies,
   filters,
@@ -71,39 +70,46 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   onToggleWatchlist,
 }) => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [genreOptions, setGenreOptions] = useState(GENRE_OPTIONS);
   const [liveResults, setLiveResults] = useState<Movie[]>([]);
   const [liveTotal, setLiveTotal] = useState<number | null>(null);
   const [isLiveFetching, setIsLiveFetching] = useState(false);
   const [isLiveActive, setIsLiveActive] = useState(false);
+  const [hasApiResults, setHasApiResults] = useState(false);
   const [liveSuggestion, setLiveSuggestion] = useState<string | undefined>(undefined);
 
   // Client recommendation engine for catalogue fallback
   const engine = useMemo(() => new ClientRecommendationEngine(movies), [movies]);
 
-  // Execute live TMDB fetch when key is available, or fall back to internal engine
   useEffect(() => {
-    const key = getActiveTmdbKey();
-    if (key) {
-      setIsLiveFetching(true);
-      fetchLiveMoviesFromTMDB(filters).then((res) => {
-        if (res.isLive) {
-          setLiveResults(res.results);
-          setLiveTotal(res.total);
-          setIsLiveActive(true);
-          setLiveSuggestion(res.suggestion);
-        } else {
-          setIsLiveActive(false);
-          setLiveTotal(null);
-        }
-      }).catch(() => {
-        setIsLiveActive(false);
-      }).finally(() => {
-        setIsLiveFetching(false);
-      });
-    } else {
-      setIsLiveActive(false);
-      setLiveTotal(null);
-    }
+    let active = true;
+    fetchMovieGenres().then((genres) => {
+      if (active && genres) {
+        setGenreOptions(['All Genres', ...genres]);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The Flask API uses the server-configured TMDB key and returns curated data on failure.
+  useEffect(() => {
+    let active = true;
+    setIsLiveFetching(true);
+    fetchLiveMoviesFromTMDB(filters).then((res) => {
+      if (!active) return;
+      setLiveResults(res.results);
+      setLiveTotal(res.total);
+      setIsLiveActive(res.isLive);
+      setHasApiResults(res.available);
+      setLiveSuggestion(res.suggestion);
+    }).finally(() => {
+      if (active) setIsLiveFetching(false);
+    });
+    return () => {
+      active = false;
+    };
   }, [filters]);
 
   // Local fallback calculation
@@ -111,9 +117,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     return engine.filterAndRank(filters);
   }, [engine, filters]);
 
-  const results = isLiveActive ? liveResults : localCalc.results;
-  const total = isLiveActive && liveTotal !== null ? liveTotal : localCalc.total;
-  const suggestion = isLiveActive ? liveSuggestion : localCalc.suggestion;
+  const results = hasApiResults ? liveResults : localCalc.results;
+  const total = hasApiResults && liveTotal !== null ? liveTotal : localCalc.total;
+  const suggestion = hasApiResults ? liveSuggestion : localCalc.suggestion;
   const totalPages = Math.max(1, Math.ceil(total / filters.limit));
 
   // Determine active filter badges
@@ -215,7 +221,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               onChange={(e) => onUpdateFilters({ genre: e.target.value, page: 1 })}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 focus:border-amber-500 focus:outline-none light:bg-zinc-50 light:border-zinc-300 light:text-zinc-900"
             >
-              {GENRE_OPTIONS.map((g) => (
+              {genreOptions.map((g) => (
                 <option key={g} value={g === 'All Genres' ? '' : g}>{g}</option>
               ))}
             </select>
@@ -369,9 +375,13 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Live from themoviedb.org
                 </span>
-              ) : (
+              ) : hasApiResults ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 light:bg-zinc-100 light:text-zinc-600">
                   Curated TMDB Catalogue
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 light:bg-zinc-100 light:text-zinc-600">
+                  Local Catalogue
                 </span>
               )}
               {isLiveFetching && (

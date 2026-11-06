@@ -101,7 +101,7 @@ cp .env.example .env
 ```
 Edit `.env` to configure your settings:
 - `SECRET_KEY`: Any secure random string for session encryption.
-- `TMDB_API_KEY`: *(Optional)* Your TMDB API key. If omitted, CineMatch automatically runs on its verified curated catalogue of real movies with real posters and metadata.
+- `TMDB_API_KEY`: *(Optional)* The Flask server's TMDB API key. It is never supplied by a browser request; if omitted or unavailable, supported API routes use the curated catalogue and include a warning.
 - `DATABASE_URL`: Defaults to `sqlite:///cinematch.db`.
 
 ### 4. Run the Application
@@ -168,7 +168,7 @@ Generated dynamically by `RecommendationEngine.generate_why_explanation()`.
 |---|---|---|
 | `GET` | `/api/health` | Service health status and engine metadata |
 | `GET` | `/api/genres` | List of supported genres with IDs |
-| `GET` | `/api/suggest-live` | Suggest a movie live from the internet (mood, genre, language, rating, custom key) |
+| `GET` | `/api/suggest-live` | Suggest a movie using server-side TMDB data when configured, otherwise curated data |
 | `GET` | `/api/movies` | Discover movies with multi-criteria filters |
 | `GET` | `/api/movies/<id>` | Full movie details with cast and director |
 | `GET` | `/api/movies/<id>/similar` | Content-based similar movies (TF-IDF) |
@@ -187,6 +187,8 @@ Generated dynamically by `RecommendationEngine.generate_why_explanation()`.
 | `DELETE` | `/api/watchlist/<id>` | Remove movie from watchlist |
 | `GET` | `/api/recent-searches` | Get recent search queries |
 | `DELETE` | `/api/recent-searches` | Clear search history |
+
+TMDB credentials are read only from the backend `TMDB_API_KEY` environment variable. The API does not accept a client key in a request header or query parameter. TMDB rate limits, timeouts, network failures, invalid responses, and missing server configuration result in sanitized warnings and curated fallbacks where available.
 
 ---
 

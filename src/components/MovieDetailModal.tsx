@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Star, Heart, Bookmark, ArrowLeft, Tv, Lightbulb, ExternalLink, Film, CheckCircle2 } from 'lucide-react';
 import { Movie, WatchProvidersData } from '../types';
 import { getWatchProviders } from '../data/movies';
 import { ClientRecommendationEngine } from '../services/recommender';
+import { fetchLiveMovieDetails, fetchSimilarMovies, fetchWatchProviders } from '../services/tmdbLiveService';
 import { MovieCard } from './MovieCard';
 
 interface MovieDetailModalProps {
@@ -32,29 +33,64 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
 }) => {
   const [selectedRegion, setSelectedRegion] = useState('IN');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [apiMovie, setApiMovie] = useState<Movie | null>(null);
+  const [apiWatchData, setApiWatchData] = useState<WatchProvidersData | null>(null);
+  const [apiSimilarMovies, setApiSimilarMovies] = useState<Movie[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setApiMovie(null);
+    fetchLiveMovieDetails(movie.id).then((details) => {
+      if (active && details) setApiMovie(details);
+    });
+    return () => {
+      active = false;
+    };
+  }, [movie.id]);
+
+  useEffect(() => {
+    let active = true;
+    setApiWatchData(null);
+    fetchWatchProviders(movie.id, selectedRegion).then((providers) => {
+      if (active && providers) setApiWatchData(providers);
+    });
+    return () => {
+      active = false;
+    };
+  }, [movie.id, selectedRegion]);
+
+  useEffect(() => {
+    let active = true;
+    setApiSimilarMovies(null);
+    fetchSimilarMovies(movie.id, 4).then((similar) => {
+      if (active && similar) setApiSimilarMovies(similar);
+    });
+    return () => {
+      active = false;
+    };
+  }, [movie.id]);
+
+  const displayMovie = apiMovie || movie;
 
   // Compute Where to Watch data (default India)
-  const watchData: WatchProvidersData = useMemo(() => {
-    return getWatchProviders(movie.id, selectedRegion);
-  }, [movie.id, selectedRegion]);
+  const watchData = apiWatchData || getWatchProviders(displayMovie.id, selectedRegion);
 
   // Compute Content-Based Similar Movies using TF-IDF Engine
   const engine = useMemo(() => new ClientRecommendationEngine(allMovies), [allMovies]);
-  const similarMovies = useMemo(() => {
-    return engine.computeSimilarity(movie, 4);
-  }, [engine, movie]);
+  const localSimilarMovies = useMemo(() => engine.computeSimilarity(displayMovie, 4), [engine, displayMovie]);
+  const similarMovies = apiSimilarMovies || localSimilarMovies;
 
-  const releaseYear = (movie.release_date || '').slice(0, 4);
-  const backdropUrl = movie.backdrop_path || movie.poster_path || '';
+  const releaseYear = (displayMovie.release_date || '').slice(0, 4);
+  const backdropUrl = displayMovie.backdrop_path || displayMovie.poster_path || '';
 
   const handleFavoriteClick = () => {
-    onToggleFavorite(movie);
+    onToggleFavorite(displayMovie);
     setFeedbackMessage(isFavorite ? 'Removed from your favorites' : 'Saved to your favorites');
     setTimeout(() => setFeedbackMessage(null), 2500);
   };
 
   const handleWatchlistClick = () => {
-    onToggleWatchlist(movie);
+    onToggleWatchlist(displayMovie);
     setFeedbackMessage(isWatchlist ? 'Removed from your watchlist' : 'Added to your watchlist');
     setTimeout(() => setFeedbackMessage(null), 2500);
   };
@@ -98,10 +134,10 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
             
             {/* Poster (Standard 2:3) */}
             <div className="w-36 sm:w-48 md:w-56 shrink-0 aspect-[2/3] rounded-xl overflow-hidden border-2 border-zinc-700/80 shadow-2xl bg-zinc-900 light:border-zinc-200">
-              {movie.poster_path ? (
+              {displayMovie.poster_path ? (
                 <img
-                  src={movie.poster_path}
-                  alt={movie.title}
+                  src={displayMovie.poster_path}
+                  alt={displayMovie.title}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -116,39 +152,39 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
             <div className="flex-1 space-y-3">
               
               <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight text-zinc-100 light:text-zinc-900">
-                {movie.title}
+                {displayMovie.title}
               </h1>
 
               {/* Zero-Pill Clean Metadata Row with Dot Separators */}
               <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-zinc-400 light:text-zinc-600">
                 <span>{releaseYear}</span>
                 <span aria-hidden="true">&middot;</span>
-                <span>{movie.runtime ? `${movie.runtime} min` : 'Runtime N/A'}</span>
+                <span>{displayMovie.runtime ? `${displayMovie.runtime} min` : 'Runtime N/A'}</span>
                 <span aria-hidden="true">&middot;</span>
-                <span className="uppercase font-medium">{movie.language_name || movie.original_language}</span>
+                <span className="uppercase font-medium">{displayMovie.language_name || displayMovie.original_language}</span>
                 <span aria-hidden="true">&middot;</span>
-                <span>{movie.origin_country ? movie.origin_country.join(', ') : 'Global'}</span>
+                <span>{displayMovie.origin_country ? displayMovie.origin_country.join(', ') : 'Global'}</span>
               </div>
 
               {/* Explicit Rating Badge with Verified TMDB Attribution */}
               <div className="inline-flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3.5 py-2 light:bg-zinc-50 light:border-zinc-200">
                 <div className="flex items-center gap-1.5 font-mono text-base font-bold text-amber-400">
                   <Star className="h-4 w-4 fill-current text-amber-500" />
-                  <span>{Number(movie.vote_average || 0).toFixed(1)}</span>
+                  <span>{Number(displayMovie.vote_average || 0).toFixed(1)}</span>
                 </div>
                 <div className="text-left border-l border-zinc-700 pl-3 light:border-zinc-300">
                   <div className="text-[11px] font-bold text-zinc-300 light:text-zinc-800 uppercase tracking-tight">
-                    Source: {movie.rating_source || 'TMDB'}
+                    Source: {displayMovie.rating_source || 'TMDB'}
                   </div>
                   <div className="text-[10px] text-zinc-400 light:text-zinc-500 font-mono">
-                    Based on {(movie.vote_count || 0).toLocaleString()} user votes
+                    Based on {(displayMovie.vote_count || 0).toLocaleString()} user votes
                   </div>
                 </div>
               </div>
 
               {/* Genres list */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                {movie.genres.map((g) => (
+                {displayMovie.genres.map((g) => (
                   <span
                     key={g}
                     className="rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-xs text-zinc-300 light:bg-zinc-100 light:border-zinc-200 light:text-zinc-700"
@@ -185,7 +221,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
                 </button>
 
                 <a
-                  href={`https://www.themoviedb.org/movie/${movie.id}`}
+                  href={`https://www.themoviedb.org/movie/${displayMovie.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-amber-400 transition-colors"
@@ -212,19 +248,19 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
                 Synopsis
               </h3>
               <p className="text-sm text-zinc-300 light:text-zinc-700 leading-relaxed">
-                {movie.overview || 'No synopsis provided for this title.'}
+                {displayMovie.overview || 'No synopsis provided for this title.'}
               </p>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
                 <span className="font-bold uppercase tracking-wider text-zinc-500 block mb-0.5">Director</span>
-                <span className="text-zinc-200 light:text-zinc-800 font-medium">{movie.director || 'Unavailable'}</span>
+                <span className="text-zinc-200 light:text-zinc-800 font-medium">{displayMovie.director || 'Unavailable'}</span>
               </div>
               <div>
                 <span className="font-bold uppercase tracking-wider text-zinc-500 block mb-0.5">Top Cast</span>
                 <span className="text-zinc-300 light:text-zinc-700 leading-normal">
-                  {movie.cast && movie.cast.length > 0 ? movie.cast.join(', ') : 'Information unavailable'}
+                  {displayMovie.cast && displayMovie.cast.length > 0 ? displayMovie.cast.join(', ') : 'Information unavailable'}
                 </span>
               </div>
             </div>
@@ -239,7 +275,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({
               </h4>
             </div>
             <p className="text-xs sm:text-sm text-zinc-300 light:text-zinc-800 leading-relaxed">
-              This film was surfaced via deterministic preference matching on genre affinity (<strong>{movie.genres.join(', ')}</strong>), language profile (<strong>{movie.language_name}</strong>), and verified rating thresholds ({movie.vote_average}+ on TMDB). The recommendation engine uses transparent rule citation without AI hallucination.
+              This film was surfaced via deterministic preference matching on genre affinity (<strong>{displayMovie.genres.join(', ')}</strong>), language profile (<strong>{displayMovie.language_name}</strong>), and verified rating thresholds ({displayMovie.vote_average}+ on TMDB). The recommendation engine uses transparent rule citation without AI hallucination.
             </p>
           </section>
 

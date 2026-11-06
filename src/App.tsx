@@ -17,7 +17,6 @@ import { WatchlistView } from './components/WatchlistView';
 import { AuthModal } from './components/AuthModal';
 import { RecentSearchesModal } from './components/RecentSearchesModal';
 import { LiveSuggesterModal } from './components/LiveSuggesterModal';
-import { TmdbConnectionBar } from './components/TmdbConnectionBar';
 import { Movie, FilterState, UserAccount, RecentSearchItem } from './types';
 import { MOVIES_DATABASE } from './data/movies';
 import { ArrowRight, Star } from 'lucide-react';
@@ -94,6 +93,10 @@ export default function App() {
     document.documentElement.classList.add(theme);
     localStorage.setItem('cinematch_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.removeItem('cinematch_tmdb_key');
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -230,9 +233,6 @@ export default function App() {
         favoritesCount={favorites.length}
         watchlistCount={watchlist.length}
       />
-
-      {/* Live TMDB Connection & Status Bar (themoviedb.org) */}
-      <TmdbConnectionBar />
 
       {/* Main View Router */}
       <main className="flex-1">

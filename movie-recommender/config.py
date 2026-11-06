@@ -30,7 +30,7 @@ class Config:
     SESSION_COOKIE_SECURE = os.getenv("FLASK_ENV") == "production"
 
     # TMDB External API Configuration
-    TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
+    TMDB_API_KEY = os.getenv("TMDB_API_KEY", "").strip()
     TMDB_BASE_URL = "https://api.themoviedb.org/3"
     TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
     TMDB_POSTER_SIZE = "w500"

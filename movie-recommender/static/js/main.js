@@ -30,6 +30,25 @@ function getFallbackPoster(title) {
   return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="%231a1a20"/><text x="50%" y="45%" fill="%2371717a" font-family="sans-serif" font-size="36" font-weight="bold" text-anchor="middle">&#127916;</text><text x="50%" y="60%" fill="%23a1a1aa" font-family="sans-serif" font-size="16" font-weight="600" text-anchor="middle">${encodeURIComponent(safeTitle)}</text><text x="50%" y="68%" fill="%2352525b" font-family="sans-serif" font-size="12" text-anchor="middle">Poster Unavailable</text></svg>`;
 }
 
+function getSafeTmdbImageUrl(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.protocol === 'https:' && url.hostname === 'image.tmdb.org' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSafeBackdrop(element, value) {
+  const imageUrl = getSafeTmdbImageUrl(value);
+  if (imageUrl) {
+    element.style.backgroundImage = `url("${imageUrl}")`;
+  } else {
+    element.style.backgroundImage = '';
+  }
+}
+
 // ============================================================================
 // 1. Theme Management (Dark / Light)
 // ============================================================================
@@ -126,53 +145,82 @@ async function loadUserCollections() {
 function createMovieCard(movie) {
   const isFav = State.userFavorites.has(movie.id);
   const isWatch = State.userWatchlist.has(movie.id);
-  const posterUrl = movie.poster_path || getFallbackPoster(movie.title);
+  const fallbackPoster = getFallbackPoster(movie.title);
+  const posterUrl = getSafeTmdbImageUrl(movie.poster_path) || fallbackPoster;
   const year = (movie.release_date || '').slice(0, 4) || 'N/A';
   const genres = (movie.genres || []).slice(0, 2).join(' · ') || 'General';
   const rating = Number(movie.vote_average || 0).toFixed(1);
   const ratingSource = movie.rating_source || 'TMDB';
+  const movieId = Number.isSafeInteger(Number(movie.id)) ? Number(movie.id) : 0;
 
   const card = document.createElement('div');
   card.className = 'movie-card';
-  card.innerHTML = `
-    <div class="poster-wrapper">
-      <img src="${posterUrl}" alt="${movie.title}" class="movie-poster" loading="lazy" onerror="this.src='${getFallbackPoster(movie.title)}'"/>
-      <div class="card-action-overlay">
-        <button class="icon-action-btn ${isFav ? 'active' : ''}" data-fav-id="${movie.id}" title="${isFav ? 'Remove Favorite' : 'Add to Favorites'}">
-          ${isFav ? '&#9829;' : '&#9825;'}
-        </button>
-        <button class="icon-action-btn ${isWatch ? 'active' : ''}" data-watch-id="${movie.id}" title="${isWatch ? 'Remove Watchlist' : 'Add to Watchlist'}">
-          ${isWatch ? '&#10003;' : '&#128278;'}
-        </button>
-      </div>
-    </div>
-    <div class="card-body">
-      <h3 class="card-title" title="${movie.title}">${movie.title}</h3>
-      <div class="card-meta-row">
-        <span>${year}</span>
-        <span class="meta-sep">&middot;</span>
-        <div class="rating-badge-sm">
-          <span>&#9733;</span>
-          <span>${rating}</span>
-        </div>
-        <span class="rating-source-text">(${ratingSource})</span>
-      </div>
-      <div class="card-genres">${genres}</div>
-      <div class="card-footer">
-        <a href="/movie/${movie.id}" class="view-details-link">View Details &rarr;</a>
-      </div>
-    </div>
-  `;
+  const posterWrapper = document.createElement('div');
+  posterWrapper.className = 'poster-wrapper';
+  const poster = document.createElement('img');
+  poster.src = posterUrl;
+  poster.alt = String(movie.title || '');
+  poster.className = 'movie-poster';
+  poster.loading = 'lazy';
+  poster.onerror = () => {
+    poster.onerror = null;
+    poster.src = fallbackPoster;
+  };
+  const overlay = document.createElement('div');
+  overlay.className = 'card-action-overlay';
+  const favBtn = document.createElement('button');
+  favBtn.className = `icon-action-btn ${isFav ? 'active' : ''}`;
+  favBtn.title = isFav ? 'Remove Favorite' : 'Add to Favorites';
+  favBtn.textContent = isFav ? '\u2665' : '\u2661';
+  const watchBtn = document.createElement('button');
+  watchBtn.className = `icon-action-btn ${isWatch ? 'active' : ''}`;
+  watchBtn.title = isWatch ? 'Remove Watchlist' : 'Add to Watchlist';
+  watchBtn.textContent = isWatch ? '\u2713' : '\uD83D\uDD16';
+  overlay.append(favBtn, watchBtn);
+  posterWrapper.append(poster, overlay);
 
-  // Attach favorite click
-  const favBtn = card.querySelector(`[data-fav-id="${movie.id}"]`);
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  const title = document.createElement('h3');
+  title.className = 'card-title';
+  title.title = String(movie.title || '');
+  title.textContent = String(movie.title || 'Untitled');
+  const meta = document.createElement('div');
+  meta.className = 'card-meta-row';
+  const yearEl = document.createElement('span');
+  yearEl.textContent = year;
+  const separator = document.createElement('span');
+  separator.className = 'meta-sep';
+  separator.textContent = '\u00b7';
+  const ratingBadge = document.createElement('div');
+  ratingBadge.className = 'rating-badge-sm';
+  const star = document.createElement('span');
+  star.textContent = '\u2605';
+  const ratingEl = document.createElement('span');
+  ratingEl.textContent = rating;
+  ratingBadge.append(star, ratingEl);
+  const ratingSourceEl = document.createElement('span');
+  ratingSourceEl.className = 'rating-source-text';
+  ratingSourceEl.textContent = `(${ratingSource})`;
+  meta.append(yearEl, separator, ratingBadge, ratingSourceEl);
+  const genresEl = document.createElement('div');
+  genresEl.className = 'card-genres';
+  genresEl.textContent = genres;
+  const footer = document.createElement('div');
+  footer.className = 'card-footer';
+  const detailsLink = document.createElement('a');
+  detailsLink.href = `/movie/${movieId}`;
+  detailsLink.className = 'view-details-link';
+  detailsLink.textContent = 'View Details \u2192';
+  footer.appendChild(detailsLink);
+  body.append(title, meta, genresEl, footer);
+  card.append(posterWrapper, body);
+
   favBtn.addEventListener('click', (e) => {
     e.preventDefault();
     toggleFavorite(movie, favBtn);
   });
 
-  // Attach watchlist click
-  const watchBtn = card.querySelector(`[data-watch-id="${movie.id}"]`);
   watchBtn.addEventListener('click', (e) => {
     e.preventDefault();
     toggleWatchlist(movie, watchBtn);
@@ -282,23 +330,36 @@ async function initHomepage() {
 
       // Set hero backdrop image from API
       if (heroBackdrop && featured.backdrop_path) {
-        heroBackdrop.style.backgroundImage = `url('${featured.backdrop_path}')`;
+        setSafeBackdrop(heroBackdrop, featured.backdrop_path);
       }
 
       // Render featured spotlight
       if (featuredContainer) {
-        featuredContainer.innerHTML = `
-          <div class="featured-backdrop" style="background-image: url('${featured.backdrop_path || featured.poster_path}')"></div>
-          <div class="featured-scrim"></div>
-          <div class="featured-content">
-            <span class="featured-kicker">Featured Spotlight &middot; ${featured.genres ? featured.genres.join(', ') : ''}</span>
-            <h3 class="featured-title">${featured.title}</h3>
-            <p class="featured-overview">${featured.overview || 'An outstanding cinematic experience.'}</p>
-            <div class="featured-actions">
-              <a href="/movie/${featured.id}" class="btn btn-primary">View Details &amp; Availability</a>
-            </div>
-          </div>
-        `;
+        const spotlight = document.createElement('div');
+        spotlight.className = 'featured-backdrop';
+        setSafeBackdrop(spotlight, featured.backdrop_path || featured.poster_path);
+        const scrim = document.createElement('div');
+        scrim.className = 'featured-scrim';
+        const content = document.createElement('div');
+        content.className = 'featured-content';
+        const kicker = document.createElement('span');
+        kicker.className = 'featured-kicker';
+        kicker.textContent = `Featured Spotlight \u00b7 ${(featured.genres || []).join(', ')}`;
+        const title = document.createElement('h3');
+        title.className = 'featured-title';
+        title.textContent = String(featured.title || 'Untitled');
+        const overview = document.createElement('p');
+        overview.className = 'featured-overview';
+        overview.textContent = String(featured.overview || 'An outstanding cinematic experience.');
+        const actions = document.createElement('div');
+        actions.className = 'featured-actions';
+        const detailsLink = document.createElement('a');
+        detailsLink.href = `/movie/${Number.isSafeInteger(Number(featured.id)) ? Number(featured.id) : 0}`;
+        detailsLink.className = 'btn btn-primary';
+        detailsLink.textContent = 'View Details & Availability';
+        actions.appendChild(detailsLink);
+        content.append(kicker, title, overview, actions);
+        featuredContainer.replaceChildren(spotlight, scrim, content);
       }
 
       // Render Top Rated Grid
@@ -509,8 +570,12 @@ function renderActiveFilterChips(container) {
   chips.forEach(chip => {
     const span = document.createElement('span');
     span.className = 'filter-chip';
-    span.innerHTML = `${chip.label} <span class="chip-remove" title="Remove">&times;</span>`;
-    span.querySelector('.chip-remove').addEventListener('click', () => {
+    const removeButton = document.createElement('span');
+    removeButton.className = 'chip-remove';
+    removeButton.title = 'Remove';
+    removeButton.textContent = '\u00d7';
+    span.append(document.createTextNode(`${chip.label} `), removeButton);
+    removeButton.addEventListener('click', () => {
       State.activeFilters[chip.key] = chip.key === 'min_rating' ? 0 : '';
       if (document.getElementById(`filter${capitalize(chip.key)}`)) {
         document.getElementById(`filter${capitalize(chip.key)}`).value = '';
@@ -556,13 +621,15 @@ async function initMovieDetailPage() {
 
     // Poster & Backdrop
     const posterEl = document.getElementById('detailPoster');
-    posterEl.src = movie.poster_path || getFallbackPoster(movie.title);
-    posterEl.onerror = () => { posterEl.src = getFallbackPoster(movie.title); };
+    const fallbackPoster = getFallbackPoster(movie.title);
+    posterEl.src = getSafeTmdbImageUrl(movie.poster_path) || fallbackPoster;
+    posterEl.onerror = () => {
+      posterEl.onerror = null;
+      posterEl.src = fallbackPoster;
+    };
 
     const heroEl = document.getElementById('detailHero');
-    if (movie.backdrop_path) {
-      heroEl.style.backgroundImage = `url('${movie.backdrop_path}')`;
-    }
+    setSafeBackdrop(heroEl, movie.backdrop_path);
 
     // Rating with explicit source label
     document.getElementById('detailVoteAvg').textContent = Number(movie.vote_average || 0).toFixed(1);
@@ -635,71 +702,75 @@ async function initMovieDetailPage() {
 async function loadWatchProviders(movieId, region = 'IN') {
   const container = document.getElementById('watchProvidersContent');
   if (!container) return;
-  container.innerHTML = '<div class="loading-spinner">Retrieving streaming channels...</div>';
+  const loading = document.createElement('div');
+  loading.className = 'loading-spinner';
+  loading.textContent = 'Retrieving streaming channels...';
+  container.replaceChildren(loading);
 
   try {
     const res = await fetch(`/api/movies/${movieId}/watch-providers?region=${region}`);
     const data = await res.json();
 
     if (!data.has_providers) {
-      container.innerHTML = `
-        <p class="watch-attribution-note">${data.message}</p>
-        <p class="watch-attribution-note" style="margin-top:0.5rem;">${data.attribution}</p>
-      `;
+      const message = document.createElement('p');
+      message.className = 'watch-attribution-note';
+      message.textContent = String(data.message || 'Streaming availability could not be verified.');
+      const attribution = document.createElement('p');
+      attribution.className = 'watch-attribution-note';
+      attribution.style.marginTop = '0.5rem';
+      attribution.textContent = String(data.attribution || '');
+      container.replaceChildren(message, attribution);
       return;
     }
 
-    let html = '';
-    if (data.flatrate && data.flatrate.length > 0) {
-      html += `
-        <div class="provider-group">
-          <h4 class="provider-category-title">Subscription Streaming</h4>
-          <div class="providers-pill-row">
-            ${data.flatrate.map(p => `
-              <div class="provider-item">
-                ${p.logo_path ? `<img src="${p.logo_path}" alt="${p.provider_name}" class="provider-logo"/>` : ''}
-                <span>${p.provider_name}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
+    const groups = [
+      { key: 'flatrate', title: 'Subscription Streaming', showLogos: true },
+      { key: 'rent', title: 'Rent', showLogos: false },
+      { key: 'buy', title: 'Buy', showLogos: false },
+    ];
+    const children = [];
+    groups.forEach(group => {
+      const providers = Array.isArray(data[group.key]) ? data[group.key] : [];
+      if (providers.length === 0) return;
 
-    if (data.rent && data.rent.length > 0) {
-      html += `
-        <div class="provider-group">
-          <h4 class="provider-category-title">Rent</h4>
-          <div class="providers-pill-row">
-            ${data.rent.map(p => `
-              <div class="provider-item">
-                <span>${p.provider_name}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
+      const providerGroup = document.createElement('div');
+      providerGroup.className = 'provider-group';
+      const heading = document.createElement('h4');
+      heading.className = 'provider-category-title';
+      heading.textContent = group.title;
+      const row = document.createElement('div');
+      row.className = 'providers-pill-row';
+      providers.forEach(provider => {
+        if (!provider || typeof provider !== 'object') return;
+        const item = document.createElement('div');
+        item.className = 'provider-item';
+        const logoUrl = group.showLogos ? getSafeTmdbImageUrl(provider.logo_path) : null;
+        if (logoUrl) {
+          const logo = document.createElement('img');
+          logo.src = logoUrl;
+          logo.alt = String(provider.provider_name || '');
+          logo.className = 'provider-logo';
+          item.appendChild(logo);
+        }
+        const name = document.createElement('span');
+        name.textContent = String(provider.provider_name || 'Unknown provider');
+        item.appendChild(name);
+        row.appendChild(item);
+      });
+      providerGroup.append(heading, row);
+      children.push(providerGroup);
+    });
 
-    if (data.buy && data.buy.length > 0) {
-      html += `
-        <div class="provider-group">
-          <h4 class="provider-category-title">Buy</h4>
-          <div class="providers-pill-row">
-            ${data.buy.map(p => `
-              <div class="provider-item">
-                <span>${p.provider_name}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    html += `<p class="watch-attribution-note">${data.attribution}</p>`;
-    container.innerHTML = html;
+    const attribution = document.createElement('p');
+    attribution.className = 'watch-attribution-note';
+    attribution.textContent = String(data.attribution || '');
+    children.push(attribution);
+    container.replaceChildren(...children);
   } catch (err) {
-    container.innerHTML = '<p class="watch-attribution-note">Streaming information is currently unavailable.</p>';
+    const message = document.createElement('p');
+    message.className = 'watch-attribution-note';
+    message.textContent = 'Streaming information is currently unavailable.';
+    container.replaceChildren(message);
   }
 }
 

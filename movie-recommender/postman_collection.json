@@ -34,9 +34,7 @@
       "name": "Suggest Movie Live (Internet)",
       "request": {
         "method": "GET",
-        "header": [
-          { "key": "X-TMDB-Key", "value": "", "description": "Optional custom TMDB key" }
-        ],
+        "header": [],
         "url": {
           "raw": "{{base_url}}/api/suggest-live?mood=mind-bending&language=en&min_rating=7.5",
           "host": ["{{base_url}}"],

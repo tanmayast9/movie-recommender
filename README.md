@@ -15,17 +15,21 @@ CineMatch is a movie discovery and recommendation project that helps people move
 
 ## How it works
 
-The React app filters and ranks its catalogue using the selected criteria. For similar-film suggestions, CineMatch compares movie text and metadata with TF-IDF and cosine similarity, then uses shared genres and language to explain the match. When TMDB is available, the app can also retrieve live movie listings and details.
+The React app sends movie discovery, search, live suggestions, details, similar-movie, genre, and watch-provider requests to the Flask API using same-origin `/api/...` routes. Flask reads `TMDB_API_KEY` from its server environment and is the only application tier that contacts TMDB. When TMDB is unavailable or the server key is not configured, the API returns curated fallback data where possible; the React app also retains its bundled catalogue as a fallback if Flask cannot be reached.
 
-The repository also includes a separate Flask application in `movie-recommender/`. That implementation provides movie discovery and recommendation endpoints, account and collection features, and SQLite-backed persistence. It uses its own Python recommendation engine and application structure.
+For local development, run Flask on port 5001 and Vite on port 3000. The Vite development proxy forwards `/api/...` requests to Flask. In the deployed Vercel configuration, the existing `/api/(.*)` rewrite routes those same-origin requests to the `movie-recommender` Flask service before the catch-all frontend rewrite.
 
 ## Technology
 
 - **Main app:** React, TypeScript, Vite, Tailwind CSS, and Lucide icons.
-- **Movie data:** TMDB API integration, with a bundled catalogue available in the React app.
+- **Movie data:** Server-side TMDB integration through Flask, with curated catalogues available as fallbacks.
 - **Recommendation methods:** Rule-based filtering and TF-IDF/cosine similarity.
 - **Companion Flask app:** Python, Flask, SQLAlchemy, SQLite, and Requests.
 
 ## Project preview
 
 The repository does not currently include screenshots of the application.
+
+## Backend TMDB configuration
+
+Set `TMDB_API_KEY` as an environment variable for the Flask service (for example, in `movie-recommender/.env` during local development or the `movie-recommender` Vercel service environment). Keep TMDB credentials out of frontend build variables; the frontend has no TMDB credentials and does not contact TMDB directly. The Flask service can still serve curated movie data if `TMDB_API_KEY` is absent.

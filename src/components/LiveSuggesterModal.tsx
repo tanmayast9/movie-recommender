@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, RefreshCw, Star, Heart, Bookmark, Eye, Tv, Globe, Key, CheckCircle2, Film } from 'lucide-react';
+import { X, Sparkles, RefreshCw, Star, Heart, Bookmark, Eye, Tv, Globe, CheckCircle2, Film } from 'lucide-react';
 import { Movie } from '../types';
 import { fetchLiveMovieSuggestion, LiveSuggestionResult } from '../services/liveMovieApi';
 
@@ -48,30 +48,23 @@ export const LiveSuggesterModal: React.FC<LiveSuggesterModalProps> = ({
   const [minRating, setMinRating] = useState(7.5);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LiveSuggestionResult | null>(null);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('cinematch_tmdb_key') || '');
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const [keySavedFeedback, setKeySavedFeedback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem('cinematch_tmdb_key', apiKey.trim());
-    setKeySavedFeedback(true);
-    setTimeout(() => setKeySavedFeedback(false), 2000);
-  };
-
   const handleGetSuggestion = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetchLiveMovieSuggestion({
         mood: selectedMood,
         language: selectedLanguage,
         min_rating: minRating,
-        customApiKey: apiKey.trim(),
       });
       setResult(res);
-    } catch (err) {
-      console.error(err);
+      if (res.warning) setError(res.warning);
+    } catch {
+      setError('Unable to retrieve a movie suggestion. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -99,7 +92,7 @@ export const LiveSuggesterModal: React.FC<LiveSuggesterModalProps> = ({
             Suggest a Movie Live
           </h2>
           <p className="text-xs text-zinc-400 light:text-zinc-600 mt-1 max-w-md mx-auto">
-            Choose your mood and language to fetch a live movie suggestion directly from the internet with ratings and streaming channels.
+            Choose your mood and language to get a movie suggestion with ratings and streaming channels.
           </p>
         </div>
 
@@ -164,45 +157,6 @@ export const LiveSuggesterModal: React.FC<LiveSuggesterModalProps> = ({
             </div>
           </div>
 
-          {/* TMDB Key Input Dropdown */}
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => setShowKeyInput(!showKeyInput)}
-              className="flex items-center gap-1.5 text-xs text-amber-500 hover:underline cursor-pointer"
-            >
-              <Key className="h-3.5 w-3.5" />
-              <span>{apiKey ? 'TMDB API Key Configured (Live)' : 'Connect Custom TMDB API Key (Optional)'}</span>
-            </button>
-
-            {showKeyInput && (
-              <div className="mt-2 p-3 rounded-xl border border-zinc-800 bg-zinc-900/80 light:bg-zinc-50 light:border-zinc-200 space-y-2">
-                <p className="text-[11px] text-zinc-400">
-                  Enter your free TMDB API key to query live over 800,000+ movies directly from TMDB's internet servers.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Paste TMDB API Key..."
-                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
-                  />
-                  <button
-                    onClick={handleSaveApiKey}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-zinc-950 hover:bg-amber-400 cursor-pointer"
-                  >
-                    Save Key
-                  </button>
-                </div>
-                {keySavedFeedback && (
-                  <span className="text-[11px] text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Key saved for live queries!
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Suggest Live Action Button */}
@@ -223,6 +177,12 @@ export const LiveSuggesterModal: React.FC<LiveSuggesterModalProps> = ({
             </>
           )}
         </button>
+
+        {error && (
+          <p role="status" className="mt-3 text-xs text-amber-400">
+            {error}
+          </p>
+        )}
 
         {/* Live Result Spotlight */}
         {result && (

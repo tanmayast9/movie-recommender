@@ -4,16 +4,27 @@ Provides real movie discovery, genres, details, search, and similar movie endpoi
 Follows TMDB attribution requirements and strict rating source labeling.
 """
 
-import os
+import hashlib
+import logging
 import time
-import urllib.request
-import urllib.error
 import json
 from typing import Dict, Any, List, Optional
+import requests
 from config import Config
 
 # In-memory TTL cache to minimize API calls and respect rate limits
 _CACHE: Dict[str, Dict[str, Any]] = {}
+logger = logging.getLogger(__name__)
+
+
+class TMDBRequestError(Exception):
+    """Sanitized upstream error safe to return from the application API."""
+
+    def __init__(self, code: str, message: str, status_code: int = 502):
+        super().__init__(message)
+        self.code = code
+        self.public_message = message
+        self.status_code = status_code
 
 
 def _get_from_cache(key: str) -> Optional[Any]:
@@ -423,8 +434,8 @@ class MovieAPIService:
     Communicates with TMDB API or seamlessly serves curated live dataset with proper caching.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or Config.TMDB_API_KEY
+    def __init__(self):
+        self.api_key = Config.TMDB_API_KEY
         self.base_url = Config.TMDB_BASE_URL
 
     def _fetch_tmdb(self, endpoint: str, params: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
@@ -432,41 +443,180 @@ class MovieAPIService:
         Executes an HTTP GET to TMDB with timeout and error handling.
         """
         if not self.api_key:
-            return None
+            raise TMDBRequestError(
+                "missing_api_key",
+                "Live TMDB data is unavailable because the server TMDB_API_KEY is not configured.",
+                503,
+            )
 
-        query_params = {"api_key": self.api_key}
-        if params:
-            query_params.update(params)
-
-        query_string = urllib.parse.urlencode(query_params)
-        url = f"{self.base_url}{endpoint}?{query_string}"
-
-        cache_key = f"tmdb:{url}"
+        request_params = dict(params or {})
+        cache_key_data = json.dumps([endpoint, request_params, self.api_key], sort_keys=True)
+        cache_key = f"tmdb:{hashlib.sha256(cache_key_data.encode()).hexdigest()}"
         cached = _get_from_cache(cache_key)
-        if cached:
+        if cached is not None:
             return cached
 
         try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "CineMatch-Recommender/1.0", "Accept": "application/json"}
+            response = requests.get(
+                f"{self.base_url}{endpoint}",
+                params={**request_params, "api_key": self.api_key},
+                headers={"User-Agent": "CineMatch-Recommender/1.0", "Accept": "application/json"},
+                timeout=6,
             )
-            with urllib.request.urlopen(req, timeout=6) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode("utf-8"))
-                    _set_in_cache(cache_key, data)
-                    return data
-        except urllib.error.HTTPError as e:
-            # Handle rate-limit (429) or invalid key (401)
-            print(f"[TMDB API HTTPError {e.code}]: {endpoint}")
-            return None
-        except Exception as e:
-            print(f"[TMDB API Network Error]: {e}")
-            return None
+        except requests.Timeout as error:
+            logger.warning("TMDB request timed out for %s", endpoint)
+            raise TMDBRequestError("timeout", "TMDB is taking too long to respond. Please try again.") from error
+        except requests.RequestException as error:
+            logger.warning("TMDB network request failed for %s", endpoint)
+            raise TMDBRequestError("network_error", "TMDB is temporarily unreachable. Please try again.") from error
+
+        if response.status_code == 404:
+            raise TMDBRequestError("not_found", "Movie was not found in TMDB.", 404)
+        if response.status_code in (401, 403):
+            logger.warning("TMDB rejected the server credentials for %s", endpoint)
+            raise TMDBRequestError("authentication_error", "TMDB authentication failed. Check the server configuration.")
+        if response.status_code == 429:
+            logger.warning("TMDB rate limit reached for %s", endpoint)
+            raise TMDBRequestError("rate_limited", "TMDB rate limit reached. Please try again shortly.", 503)
+        if response.status_code >= 500:
+            logger.warning("TMDB returned HTTP %s for %s", response.status_code, endpoint)
+            raise TMDBRequestError("upstream_error", "TMDB is temporarily unavailable. Please try again.")
+        if not response.ok:
+            logger.warning("TMDB returned HTTP %s for %s", response.status_code, endpoint)
+            raise TMDBRequestError("upstream_error", "TMDB could not complete the request.")
+
+        try:
+            data = response.json()
+        except ValueError as error:
+            logger.warning("TMDB returned invalid JSON for %s", endpoint)
+            raise TMDBRequestError("invalid_response", "TMDB returned an invalid response.") from error
+        if not isinstance(data, dict):
+            logger.warning("TMDB returned an unexpected response for %s", endpoint)
+            raise TMDBRequestError("invalid_response", "TMDB returned an invalid response.")
+
+        _set_in_cache(cache_key, data)
+        return data
 
     def get_genres(self) -> List[Dict[str, Any]]:
         """Returns list of supported genres."""
-        return [{"id": k, "name": v} for k, v in TMDB_GENRES.items()]
+        response = self._fetch_tmdb("/genre/movie/list")
+        genres = response.get("genres", [])
+        if not isinstance(genres, list):
+            raise TMDBRequestError("invalid_response", "TMDB returned an invalid genre list.")
+        return [genre for genre in genres if isinstance(genre, dict) and "id" in genre and "name" in genre]
+
+    def get_curated_genres(self) -> List[Dict[str, Any]]:
+        return [{"id": genre_id, "name": name} for genre_id, name in TMDB_GENRES.items()]
+
+    def discover_movies(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Discover or search movies using TMDB query parameters from the server."""
+        page = max(1, min(int(filters.get("page") or 1), 500))
+        limit = max(1, min(int(filters.get("limit") or 12), 50))
+        start_offset = (page - 1) * limit
+        tmdb_page = start_offset // 20 + 1
+        page_offset = start_offset % 20
+        search_query = (filters.get("search") or "").strip()
+        params: Dict[str, str] = {"include_adult": "false"}
+
+        if search_query:
+            endpoint = "/search/movie"
+            params["query"] = search_query
+        else:
+            endpoint = "/discover/movie"
+            sort_map = {
+                "rating": "vote_average.desc",
+                "rating_asc": "vote_average.asc",
+                "release_date": "primary_release_date.desc",
+                "release_date_asc": "primary_release_date.asc",
+                "title": "original_title.asc",
+            }
+            params["sort_by"] = sort_map.get(filters.get("sort"), "popularity.desc")
+            params["vote_count.gte"] = "50" if filters.get("sort") == "rating_asc" else "100"
+
+            genre = filters.get("genre")
+            genre_id = GENRE_NAME_TO_ID.get(str(genre or "").strip().lower())
+            if genre_id:
+                params["with_genres"] = str(genre_id)
+            if filters.get("language"):
+                params["with_original_language"] = str(filters["language"]).lower()
+            if filters.get("country"):
+                params["with_origin_country"] = str(filters["country"]).upper()
+            if filters.get("min_rating") is not None:
+                params["vote_average.gte"] = str(filters["min_rating"])
+            if filters.get("max_rating") is not None:
+                params["vote_average.lte"] = str(filters["max_rating"])
+            if filters.get("year_from"):
+                params["primary_release_date.gte"] = f"{filters['year_from']}-01-01"
+            if filters.get("year_to"):
+                params["primary_release_date.lte"] = f"{filters['year_to']}-12-31"
+
+        raw_results = []
+        response: Dict[str, Any] = {}
+        while len(raw_results) < page_offset + limit and tmdb_page <= 500:
+            response = self._fetch_tmdb(endpoint, {**params, "page": str(tmdb_page)})
+            page_results = response.get("results", [])
+            if not isinstance(page_results, list):
+                raise TMDBRequestError("invalid_response", "TMDB returned an invalid movie list.")
+            raw_results.extend(item for item in page_results if isinstance(item, dict))
+            if not page_results or tmdb_page >= int(response.get("total_pages") or tmdb_page):
+                break
+            tmdb_page += 1
+        results = [self._normalize_tmdb_movie(item) for item in raw_results][page_offset:page_offset + limit]
+
+        if search_query:
+            from recommender.engine import RecommendationEngine
+            results = RecommendationEngine(results).filter_and_rank(
+                genre=filters.get("genre"),
+                language=filters.get("language"),
+                country=filters.get("country"),
+                min_rating=filters.get("min_rating"),
+                max_rating=filters.get("max_rating"),
+                year_from=filters.get("year_from"),
+                year_to=filters.get("year_to"),
+                sort_by=filters.get("sort") or "popularity",
+            )
+
+        return {
+            "results": results,
+            "total_results": int(response.get("total_results") or len(results)),
+            "page": page,
+            "total_pages": max(1, (int(response.get("total_results") or len(results)) + limit - 1) // limit),
+        }
+
+    def search_movies(self, query: str, page: int = 1) -> Dict[str, Any]:
+        response = self._fetch_tmdb(
+            "/search/movie",
+            {"query": query, "page": str(max(1, min(page, 500))), "include_adult": "false"},
+        )
+        raw_results = response.get("results", [])
+        if not isinstance(raw_results, list):
+            raise TMDBRequestError("invalid_response", "TMDB returned an invalid movie list.")
+        return {
+            "results": [self._normalize_tmdb_movie(item) for item in raw_results if isinstance(item, dict)],
+            "total_results": int(response.get("total_results") or 0),
+            "page": int(response.get("page") or page),
+            "total_pages": int(response.get("total_pages") or 1),
+        }
+
+    def get_similar_movies(self, movie_id: int, limit: int = 6) -> Dict[str, Any]:
+        response = self._fetch_tmdb(
+            f"/movie/{movie_id}/similar",
+            {"page": "1", "include_adult": "false"},
+        )
+        raw_results = response.get("results", [])
+        if not isinstance(raw_results, list):
+            raise TMDBRequestError("invalid_response", "TMDB returned an invalid similar-movie list.")
+        return {
+            "results": [self._normalize_tmdb_movie(item) for item in raw_results if isinstance(item, dict)][:limit],
+            "total_results": int(response.get("total_results") or 0),
+        }
+
+    def get_watch_providers(self, movie_id: int, region: str) -> Optional[Dict[str, Any]]:
+        response = self._fetch_tmdb(f"/movie/{movie_id}/watch/providers")
+        results = response.get("results", {})
+        if not isinstance(results, dict):
+            raise TMDBRequestError("invalid_response", "TMDB returned invalid watch-provider data.")
+        return results.get(region.upper())
 
     def get_movie_by_id(self, movie_id: int) -> Optional[Dict[str, Any]]:
         """Fetch movie details by ID."""
@@ -475,13 +625,9 @@ class MovieAPIService:
             if m["id"] == movie_id:
                 return m
 
-        # 2. Try live TMDB if configured
-        if self.api_key:
-            res = self._fetch_tmdb(f"/movie/{movie_id}", {"append_to_response": "credits"})
-            if res:
-                return self._normalize_tmdb_movie(res)
-
-        return None
+        # 2. Try live TMDB using only the backend-configured key.
+        res = self._fetch_tmdb(f"/movie/{movie_id}", {"append_to_response": "credits"})
+        return self._normalize_tmdb_movie(res)
 
     def get_all_curated(self) -> List[Dict[str, Any]]:
         return list(CURATED_MOVIES)
@@ -491,16 +637,11 @@ class MovieAPIService:
         mood: Optional[str] = None,
         genre: Optional[str] = None,
         language: Optional[str] = None,
-        min_rating: Optional[float] = None,
-        custom_api_key: Optional[str] = None
+        min_rating: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Suggests a movie from the internet live.
-        If a TMDB key is available (system or custom), queries TMDB's live /discover/movie or /trending.
-        Otherwise, uses the verified TMDB live dataset with algorithmic ranking.
+        Suggest a movie using TMDB when configured, otherwise use curated data.
         """
-        effective_key = custom_api_key or self.api_key
-        
         # Mood to genre mapping
         mood_genre_map = {
             "mind-bending": "Sci-Fi",
@@ -508,6 +649,7 @@ class MovieAPIService:
             "chills": "Horror",
             "emotional": "Drama",
             "lighthearted": "Comedy",
+            "feel-good": "Comedy",
             "mythological": "Fantasy",
             "suspense": "Thriller"
         }
@@ -515,29 +657,36 @@ class MovieAPIService:
 
         live_movies = []
         is_live_network = False
+        warning = None
 
-        if effective_key:
-            params: Dict[str, str] = {
-                "sort_by": "popularity.desc",
-                "vote_count.gte": "200"
-            }
-            if target_genre:
-                g_id = GENRE_NAME_TO_ID.get(target_genre.lower())
-                if g_id:
-                    params["with_genres"] = str(g_id)
-            if language:
-                params["with_original_language"] = language.lower()
-            if min_rating:
-                params["vote_average.gte"] = str(min_rating)
+        params: Dict[str, str] = {
+            "sort_by": "popularity.desc",
+            "vote_count.gte": "150",
+            "include_adult": "false",
+        }
+        if target_genre:
+            g_id = GENRE_NAME_TO_ID.get(target_genre.lower())
+            if g_id:
+                params["with_genres"] = str(g_id)
+        if language:
+            params["with_original_language"] = language.lower()
+        if min_rating is not None:
+            params["vote_average.gte"] = str(min_rating)
 
+        try:
             res = self._fetch_tmdb("/discover/movie", params)
-            if res and "results" in res and res["results"]:
-                live_movies = [self._normalize_tmdb_movie(m) for m in res["results"]]
-                is_live_network = True
+            raw_results = res.get("results", [])
+            if isinstance(raw_results, list):
+                live_movies = [self._normalize_tmdb_movie(item) for item in raw_results if isinstance(item, dict)]
+                is_live_network = bool(live_movies)
+        except TMDBRequestError as error:
+            warning = error.public_message
 
         if not live_movies:
             # Fallback to local verified TMDB catalogue
             live_movies = list(CURATED_MOVIES)
+            if not warning:
+                warning = "TMDB returned no matching movies; showing the curated catalogue."
 
         from recommender.engine import RecommendationEngine
         engine = RecommendationEngine(live_movies)
@@ -556,7 +705,7 @@ class MovieAPIService:
         if mood:
             explanation = f"Matched your '{mood}' mood preference; selected based on thematic pacing and high acclaim."
 
-        return {
+        result = {
             "movie": selected,
             "source": "TMDB Live Internet API" if is_live_network else "TMDB Curated Live Dataset",
             "is_live_network": is_live_network,
@@ -564,6 +713,9 @@ class MovieAPIService:
             "mood": mood,
             "requested_genre": target_genre
         }
+        if warning:
+            result["warning"] = warning
+        return result
 
     def _normalize_tmdb_movie(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Maps raw TMDB payload to standard CineMatch schema."""
@@ -586,8 +738,22 @@ class MovieAPIService:
             "title": raw.get("title") or raw.get("original_title"),
             "original_title": raw.get("original_title"),
             "genres": genres,
+            "genre_ids": raw.get("genre_ids", []),
             "original_language": raw.get("original_language"),
+            "language_name": {
+                "en": "English",
+                "kn": "Kannada",
+                "hi": "Hindi",
+                "te": "Telugu",
+                "ta": "Tamil",
+                "ml": "Malayalam",
+                "ko": "Korean",
+                "ja": "Japanese",
+                "es": "Spanish",
+                "fr": "French",
+            }.get(raw.get("original_language"), raw.get("original_language") or "Unknown"),
             "origin_country": raw.get("origin_country") or [],
+            "country_name": ", ".join(raw.get("origin_country") or []) or "TMDB",
             "vote_average": round(float(raw.get("vote_average") or 0.0), 2),
             "vote_count": raw.get("vote_count", 0),
             "rating_source": "TMDB",

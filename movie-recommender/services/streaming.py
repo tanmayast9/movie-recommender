@@ -6,6 +6,7 @@ Attributes data to JustWatch via TMDB.
 
 from typing import Dict, Any, Optional
 from config import Config
+from services.movie_api import MovieAPIService, TMDBRequestError
 
 
 # Curated real streaming availability for fallback/offline
@@ -87,7 +88,8 @@ class StreamingService:
     Retrieves watch provider information for movies.
     """
 
-    def __init__(self, default_region: str = "IN"):
+    def __init__(self, api_service: Optional[MovieAPIService] = None, default_region: str = "IN"):
+        self.api_service = api_service or MovieAPIService()
         self.default_region = default_region
 
     def get_watch_providers(self, movie_id: int, region: Optional[str] = None) -> Dict[str, Any]:
@@ -96,12 +98,20 @@ class StreamingService:
         Gracefully handles unavailable data with truthful attribution.
         """
         target_region = (region or self.default_region).upper()
+        warning = None
+
+        try:
+            live_data = self.api_service.get_watch_providers(movie_id, target_region)
+            if live_data is not None:
+                return self._format_providers(movie_id, target_region, live_data)
+        except TMDBRequestError as error:
+            warning = error.public_message
 
         movie_data = STREAMING_CATALOGUE.get(movie_id, {})
         region_data = movie_data.get(target_region)
 
         if not region_data:
-            return {
+            response = {
                 "movie_id": movie_id,
                 "region": target_region,
                 "has_providers": False,
@@ -111,13 +121,16 @@ class StreamingService:
                 "rent": [],
                 "buy": []
             }
+            if warning:
+                response["warning"] = warning
+            return response
 
         flatrate = region_data.get("flatrate", [])
         rent = region_data.get("rent", [])
         buy = region_data.get("buy", [])
         has_any = bool(flatrate or rent or buy)
 
-        return {
+        response = {
             "movie_id": movie_id,
             "region": target_region,
             "has_providers": has_any,
@@ -126,4 +139,40 @@ class StreamingService:
             "flatrate": flatrate,
             "rent": rent,
             "buy": buy
+        }
+        if warning:
+            response["warning"] = warning
+        return response
+
+    @staticmethod
+    def _format_providers(movie_id: int, region: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        def providers(category: str) -> list:
+            items = data.get(category, [])
+            if not isinstance(items, list):
+                raise TMDBRequestError("invalid_response", "TMDB returned invalid watch-provider data.")
+            return [
+                {
+                    "provider_name": item.get("provider_name", "Unknown provider"),
+                    "logo_path": (
+                        f"{Config.TMDB_IMAGE_BASE_URL}/original{item['logo_path']}"
+                        if item.get("logo_path") else None
+                    ),
+                }
+                for item in items
+                if isinstance(item, dict)
+            ]
+
+        flatrate = providers("flatrate")
+        rent = providers("rent")
+        buy = providers("buy")
+        has_any = bool(flatrate or rent or buy)
+        return {
+            "movie_id": movie_id,
+            "region": region,
+            "has_providers": has_any,
+            "attribution": "Streaming data provided by JustWatch via TMDB",
+            "message": "Available on the following authorized providers:" if has_any else "No active streaming subscriptions verified at this time.",
+            "flatrate": flatrate,
+            "rent": rent,
+            "buy": buy,
         }

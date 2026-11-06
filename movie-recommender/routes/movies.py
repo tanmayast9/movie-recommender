@@ -3,13 +3,13 @@ Movie discovery, search, and recommendation routes.
 """
 
 from flask import Blueprint, request, jsonify
-from services.movie_api import MovieAPIService
+from services.movie_api import MovieAPIService, TMDBRequestError
 from services.streaming import StreamingService
 from recommender.engine import RecommendationEngine
 
 movies_bp = Blueprint("movies", __name__)
 api_service = MovieAPIService()
-streaming_service = StreamingService()
+streaming_service = StreamingService(api_service)
 engine = RecommendationEngine(api_service.get_all_curated())
 
 
@@ -28,8 +28,20 @@ def health_check():
 @movies_bp.route("/api/genres", methods=["GET"])
 def get_genres():
     """Returns list of supported genres."""
+    warning = None
+    try:
+        genres = api_service.get_genres()
+        source = "tmdb"
+    except TMDBRequestError as error:
+        genres = api_service.get_curated_genres()
+        source = "curated"
+        warning = error.public_message
+
+    response = {"genres": genres, "source": source}
+    if warning:
+        response["warning"] = warning
     return jsonify({
-        "genres": api_service.get_genres()
+        **response
     }), 200
 
 
@@ -87,34 +99,53 @@ def discover_movies():
     page = max(int(request.args.get("page", 1)), 1)
     limit = max(min(int(request.args.get("limit", 12)), 50), 1)
 
-    # 1. Filter and rank using Python RecommendationEngine
-    all_movies = api_service.get_all_curated()
-    engine.set_movies(all_movies)
+    filters = {
+        "genre": genre,
+        "language": language,
+        "country": country,
+        "min_rating": min_rating,
+        "max_rating": max_rating,
+        "year_from": year_from,
+        "year_to": year_to,
+        "sort": sort_by,
+        "search": search_q,
+        "page": page,
+        "limit": limit,
+    }
 
-    filtered = engine.filter_and_rank(
-        movies=all_movies,
-        genre=genre,
-        language=language,
-        country=country,
-        min_rating=min_rating,
-        max_rating=max_rating,
-        year_from=year_from,
-        year_to=year_to,
-        search_query=search_q,
-        sort_by=sort_by
-    )
+    warning = None
+    try:
+        live_results = api_service.discover_movies(filters)
+        paginated = live_results["results"]
+        total_results = live_results["total_results"]
+        source = "tmdb"
+    except TMDBRequestError as error:
+        warning = error.public_message
+        all_movies = api_service.get_all_curated()
+        engine.set_movies(all_movies)
+        filtered = engine.filter_and_rank(
+            movies=all_movies,
+            genre=genre,
+            language=language,
+            country=country,
+            min_rating=min_rating,
+            max_rating=max_rating,
+            year_from=year_from,
+            year_to=year_to,
+            search_query=search_q,
+            sort_by=sort_by
+        )
+        total_results = len(filtered)
+        start_idx = (page - 1) * limit
+        paginated = filtered[start_idx:start_idx + limit]
+        source = "curated"
 
-    total_results = len(filtered)
     total_pages = max(1, (total_results + limit - 1) // limit)
-    start_idx = (page - 1) * limit
-    paginated = filtered[start_idx:start_idx + limit]
-
-    # Suggestion if empty
     suggestion = None
     if total_results == 0:
         suggestion = "No movies matched your exact filters. Try relaxing the rating threshold, broadening the release year range, or removing language/country constraints."
 
-    return jsonify({
+    response = {
         "page": page,
         "limit": limit,
         "total_results": total_results,
@@ -131,17 +162,27 @@ def discover_movies():
             "search": search_q
         },
         "suggestion": suggestion,
-        "results": paginated
-    }), 200
+        "results": paginated,
+        "source": source,
+    }
+    if warning:
+        response["warning"] = warning
+    return jsonify(response), 200
 
 
 @movies_bp.route("/api/movies/<int:movie_id>", methods=["GET"])
 def get_movie_detail(movie_id):
     """Fetch movie details by ID."""
-    movie = api_service.get_movie_by_id(movie_id)
+    try:
+        movie = api_service.get_movie_by_id(movie_id)
+    except TMDBRequestError as error:
+        return jsonify({"error": error.public_message, "code": error.code}), error.status_code
     if not movie:
         return jsonify({"error": "Movie not found"}), 404
-    return jsonify({"movie": movie}), 200
+    response = {"movie": movie}
+    if not api_service.api_key:
+        response["warning"] = "Live TMDB data is unavailable because the server TMDB_API_KEY is not configured."
+    return jsonify(response), 200
 
 
 @movies_bp.route("/api/movies/<int:movie_id>/similar", methods=["GET"])
@@ -150,22 +191,36 @@ def get_similar_movies(movie_id):
     Returns content-based similar movies calculated with TF-IDF and Cosine Similarity.
     Includes transparent 'Why This Movie?' explanations.
     """
-    target = api_service.get_movie_by_id(movie_id)
+    try:
+        target = api_service.get_movie_by_id(movie_id)
+    except TMDBRequestError as error:
+        return jsonify({"error": error.public_message, "code": error.code}), error.status_code
     if not target:
         return jsonify({"error": "Movie not found"}), 404
 
-    all_movies = api_service.get_all_curated()
-    engine.set_movies(all_movies)
+    top_n = max(1, min(int(request.args.get("limit", 6)), 12))
+    warning = None
+    try:
+        live_similar = api_service.get_similar_movies(movie_id, top_n)
+        similar = live_similar["results"]
+        source = "tmdb"
+    except TMDBRequestError as error:
+        warning = error.public_message
+        all_movies = api_service.get_all_curated()
+        engine.set_movies(all_movies)
+        similar = engine.compute_similarity(target, all_movies, top_n=top_n)
+        source = "curated"
 
-    top_n = min(int(request.args.get("limit", 6)), 12)
-    similar = engine.compute_similarity(target, all_movies, top_n=top_n)
-
-    return jsonify({
+    response = {
         "target_movie_id": movie_id,
         "target_title": target.get("title"),
         "algorithm": "Content-Based Filtering (TF-IDF Vectorization & Cosine Similarity)",
-        "results": similar
-    }), 200
+        "results": similar,
+        "source": source,
+    }
+    if warning:
+        response["warning"] = warning
+    return jsonify(response), 200
 
 
 @movies_bp.route("/api/movies/<int:movie_id>/watch-providers", methods=["GET"])
@@ -185,7 +240,6 @@ def suggest_live_movie():
     - genre: (e.g. 'Sci-Fi', 'Action', 'Horror', 'Drama')
     - language: ISO 639-1 code (e.g. 'en', 'kn', 'hi', 'ko')
     - min_rating: Float (e.g. 7.5)
-    - api_key: Optional custom TMDB API key passed via query or X-TMDB-Key header
     """
     mood = request.args.get("mood")
     genre = request.args.get("genre")
@@ -198,20 +252,19 @@ def suggest_live_movie():
         except ValueError:
             pass
 
-    custom_key = request.headers.get("X-TMDB-Key") or request.args.get("api_key")
-
     result = api_service.suggest_movie_live(
         mood=mood,
         genre=genre,
         language=language,
-        min_rating=min_rating,
-        custom_api_key=custom_key
+        min_rating=min_rating
     )
 
     # Attach watch providers
     movie_id = result["movie"]["id"]
     watch_info = streaming_service.get_watch_providers(movie_id, region="IN")
     result["watch_providers"] = watch_info
+    if watch_info.get("warning"):
+        result.setdefault("warning", watch_info["warning"])
 
     return jsonify(result), 200
 
@@ -223,7 +276,20 @@ def search_movies():
     if not q:
         return jsonify({"results": []}), 200
 
-    all_movies = api_service.get_all_curated()
-    engine.set_movies(all_movies)
-    matches = engine.filter_and_rank(movies=all_movies, search_query=q)
-    return jsonify({"query": q, "results": matches[:10]}), 200
+    warning = None
+    try:
+        search_results = api_service.search_movies(q)
+        results = search_results["results"][:10]
+        source = "tmdb"
+    except TMDBRequestError as error:
+        warning = error.public_message
+        all_movies = api_service.get_all_curated()
+        engine.set_movies(all_movies)
+        matches = engine.filter_and_rank(movies=all_movies, search_query=q)
+        results = matches[:10]
+        source = "curated"
+
+    response = {"query": q, "results": results, "source": source}
+    if warning:
+        response["warning"] = warning
+    return jsonify(response), 200
